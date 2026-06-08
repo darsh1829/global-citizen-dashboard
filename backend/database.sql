@@ -4,6 +4,7 @@
 -- TEXT is used for the password hash, which can be long. NOT NULL means this field cannot be empty.
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
+    name VARCHAR(255), -- Add this new line
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash TEXT NOT NULL
 );
