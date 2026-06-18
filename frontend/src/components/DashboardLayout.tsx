@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   Home,
   Newspaper,
