@@ -10,7 +10,7 @@ const cors = require('cors');
 const app = express();
 
 // --- MIDDLEWARE ---
-app.use(cors({ origin: ['http://localhost:5173', 'https://global-citizen-dashboard.vercel.app'] }));
+app.use(cors({ origin: ['http://localhost:5173', 'https://global-citizen-dashboard.vercel.app', 'https://global-citizen.darssh.dev'] }));
 app.use(express.json());
 
 

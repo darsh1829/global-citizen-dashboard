@@ -20,10 +20,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { getUserProfile } from "@/services/api";
 
-// Turns "Hiya Majmundar" into "HM", or falls back to "?" if no name yet
 function getInitials(name: string | null | undefined): string {
   if (!name) return "?";
   const parts = name.trim().split(/\s+/);
@@ -31,9 +29,14 @@ function getInitials(name: string | null | undefined): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
+const navItems = [
+  { to: "/", icon: Home, label: "Home" },
+  { to: "/news", icon: Newspaper, label: "News" },
+  { to: "/crypto", icon: Bitcoin, label: "Crypto" },
+  { to: "/currency", icon: CircleDollarSign, label: "Currency" },
+];
+
 function DashboardLayout() {
-  // Sidebar starts collapsed by default for the hover effect
-  const [isCollapsed, setIsCollapsed] = useState(true);
   const [userName, setUserName] = useState<string | null>(null);
   const navigate = useNavigate();
 
@@ -50,76 +53,56 @@ function DashboardLayout() {
 
   const initials = getInitials(userName);
 
-  // Helper component for navigation links to avoid repetition
-  const NavLinkItem = ({ to, icon: Icon, children }: any) => (
-    <TooltipProvider delayDuration={0}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <NavLink
-            to={to}
-            className={({ isActive }) =>
-              `flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:bg-muted hover:text-foreground md:h-8 md:w-8 ${
-                isActive ? "bg-accent text-accent-foreground" : "text-muted-foreground"
-              } ${!isCollapsed ? "w-full justify-start gap-3 px-3" : ""}`
-            }
-          >
-            <Icon className="h-5 w-5 shrink-0" />
-            <span className={isCollapsed ? "sr-only" : "truncate"}>{children}</span>
-          </NavLink>
-        </TooltipTrigger>
-        <TooltipContent side="right">{children}</TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
-
   return (
-    <div className="flex min-h-screen w-full flex-col bg-muted/40">
-      {/* --- DESKTOP SIDEBAR --- */}
-      <aside
-        className={`fixed inset-y-0 left-0 z-10 hidden w-14 flex-col border-r bg-background sm:flex transition-all duration-300 ${isCollapsed ? "" : "sm:w-56"}`}
-        onMouseEnter={() => setIsCollapsed(false)}
-        onMouseLeave={() => setIsCollapsed(true)}
-      >
-        <nav className="flex flex-col items-start gap-1 px-2 py-4">
-          {/* Logo */}
-          <Link
-            to="/"
-            className="group flex h-9 w-9 shrink-0 items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground md:h-8 md:w-8 mb-4 self-center"
-          >
+    <div className="flex min-h-screen w-full bg-muted/40">
+      {/* --- DESKTOP SIDEBAR (fixed width, always expanded) --- */}
+      <aside className="hidden sm:flex sm:w-56 sm:flex-col fixed inset-y-0 left-0 z-10 border-r bg-background">
+        {/* Logo */}
+        <div className="flex items-center gap-2 px-4 h-14 border-b">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             <Globe className="h-5 w-5" />
-            <span className="sr-only">Global Citizen</span>
-          </Link>
+          </div>
+          <span className="font-semibold text-sm">Global Citizen</span>
+        </div>
 
-          <NavLinkItem to="/" icon={Home}>Home</NavLinkItem>
-          <NavLinkItem to="/news" icon={Newspaper}>News</NavLinkItem>
-          <NavLinkItem to="/crypto" icon={Bitcoin}>Crypto</NavLinkItem>
-          <NavLinkItem to="/currency" icon={CircleDollarSign}>Currency</NavLinkItem>
+        {/* Nav links */}
+        <nav className="flex flex-col gap-1 px-3 py-4 flex-1">
+          {navItems.map(({ to, icon: Icon, label }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={to === "/"}
+              className={({ isActive }) =>
+                `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  isActive
+                    ? "bg-accent text-accent-foreground"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`
+              }
+            >
+              <Icon className="h-4 w-4 shrink-0" />
+              <span>{label}</span>
+            </NavLink>
+          ))}
         </nav>
 
-        <nav className="mt-auto flex flex-col items-start gap-1 px-2 py-4 border-t">
-          {/* --- User Account Dropdown with Initials Avatar --- */}
+        {/* Account section, pinned to bottom */}
+        <div className="border-t px-3 py-3">
           <DropdownMenu>
-            <TooltipProvider delayDuration={0}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      className={`flex h-9 items-center justify-center rounded-lg p-0 text-foreground transition-colors hover:bg-muted md:h-8 ${!isCollapsed ? "w-full justify-start gap-3 px-2" : "w-9 md:w-8"}`}
-                    >
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-                        {initials}
-                      </span>
-                      <span className={isCollapsed ? "sr-only" : "truncate text-sm"}>
-                        {userName || "My Account"}
-                      </span>
-                    </Button>
-                  </DropdownMenuTrigger>
-                </TooltipTrigger>
-                <TooltipContent side="right">{userName || "My Account"}</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <DropdownMenuContent side="right" align="end">
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                className="w-full justify-start gap-3 px-2 h-auto py-2"
+              >
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+                  {initials}
+                </span>
+                <span className="truncate text-sm font-normal">
+                  {userName || "My Account"}
+                </span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="top" align="start" className="w-52">
               <DropdownMenuLabel>{userName || "My Account"}</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => navigate("/settings")}>
@@ -130,39 +113,71 @@ function DashboardLayout() {
               <DropdownMenuItem onClick={handleLogout}>Logout</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-        </nav>
+        </div>
       </aside>
 
       {/* --- MAIN CONTENT AREA --- */}
-      <div className={`flex flex-col sm:gap-4 sm:py-4 transition-all duration-300 ${isCollapsed ? "sm:pl-14" : "sm:pl-56"}`}>
-        {/* --- HEADER --- */}
-        <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
-          {/* Mobile Menu (Sheet) */}
+      <div className="flex flex-col flex-1 sm:ml-56">
+        {/* --- HEADER (mobile only) --- */}
+        <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:hidden">
           <Sheet>
             <SheetTrigger asChild>
-              <Button size="icon" variant="outline" className="sm:hidden">
+              <Button size="icon" variant="outline">
                 <PanelLeft className="h-5 w-5" />
                 <span className="sr-only">Toggle Menu</span>
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="sm:max-w-xs">
-              <nav className="grid gap-6 text-lg font-medium">
-                <Link to="/" className="group flex h-10 w-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground">
+            <SheetContent side="left" className="w-56 p-0">
+              <div className="flex items-center gap-2 px-4 h-14 border-b">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
                   <Globe className="h-5 w-5" />
-                  <span className="sr-only">Global Citizen</span>
-                </Link>
-                <NavLink to="/">Home</NavLink>
-                <NavLink to="/news">News</NavLink>
-                <NavLink to="/crypto">Crypto</NavLink>
-                <NavLink to="/currency">Currency</NavLink>
-                <NavLink to="/settings">Settings</NavLink>
+                </div>
+                <span className="font-semibold text-sm">Global Citizen</span>
+              </div>
+              <nav className="flex flex-col gap-1 px-3 py-4">
+                {navItems.map(({ to, icon: Icon, label }) => (
+                  <NavLink
+                    key={to}
+                    to={to}
+                    end={to === "/"}
+                    className={({ isActive }) =>
+                      `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                        isActive
+                          ? "bg-accent text-accent-foreground"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                      }`
+                    }
+                  >
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span>{label}</span>
+                  </NavLink>
+                ))}
+                <NavLink
+                  to="/settings"
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                      isActive
+                        ? "bg-accent text-accent-foreground"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    }`
+                  }
+                >
+                  <Settings className="h-4 w-4 shrink-0" />
+                  <span>Settings</span>
+                </NavLink>
               </nav>
             </SheetContent>
           </Sheet>
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+              <Globe className="h-4 w-4" />
+            </div>
+            <span className="font-semibold text-sm">Global Citizen</span>
+          </div>
         </header>
 
         {/* --- PAGE CONTENT --- */}
-        <main className="grid flex-1 items-start gap-4 p-4 sm:px-6 sm:py-0 md:gap-8">
+        <main className="flex-1 p-4 sm:p-6">
           <Outlet />
         </main>
       </div>
