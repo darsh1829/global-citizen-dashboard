@@ -1,6 +1,6 @@
 import axios from "axios";
 const API_URL = `${import.meta.env.VITE_API_URL || "http://localhost:3000"}/api`;
-
+console.log("BUILD ENV CHECK:", import.meta.env.VITE_API_URL);
 interface PreferencesPayload {
   tracked_countries: string[];
   tracked_cryptos: string[];
