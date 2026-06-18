@@ -261,7 +261,7 @@ app.get('/api/ai/insight', async (req, res) => {
       .map((article) => `- ${article.title}`)
       .join('\n');
 
-    const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash" });
+   const modelFallbacks = ["gemini-3.5-flash", "gemini-2.5-flash-preview-04-17"];
 
     const prompt = `You are a sharp, neutral news analyst writing for a "Global Citizen Dashboard" app.
 Based on these recent headlines, write a short "Insight of the Day" — 3-4 sentences summarizing
@@ -271,11 +271,21 @@ Do not just list the headlines back, synthesize them into one cohesive insight.
 Headlines:
 ${headlines}`;
 
-    const result = await model.generateContent(prompt);
-    const insightText = result.response.text();
+    let result;
+for (const modelName of modelFallbacks) {
+  try {
+    const model = genAI.getGenerativeModel({ model: modelName });
+    result = await model.generateContent(prompt);
+    console.log(`AI Insight generated using: ${modelName}`);
+    break;
+  } catch (err) {
+    console.error(`Model ${modelName} failed:`, err.message);
+    if (modelName === modelFallbacks[modelFallbacks.length - 1]) throw err;
+  }
+}
 
     const mapped = {
-      insight: insightText.trim(),
+      insight: result.response.text().trim(),
       generatedAt: new Date().toISOString()
     };
 
