@@ -3,41 +3,35 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
-import axios, { isAxiosError } from "axios";
+import { isAxiosError } from "axios";
 import { useNavigate, Link } from "react-router-dom";
+import { loginUser } from "@/services/api";
 
 function LoginPage(){
     
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [error, setError] = useState<string | null>(null);
     const navigate = useNavigate();
     
    async function handleLogin(e: React.FormEvent){
         e.preventDefault();
+        setError(null);
         try {
-      //Send the email and password to the backend API
-      const response = await axios.post('http://localhost:3000/api/auth/login', {
-        email: email,
-        password: password,
-      });
-      //console.log("Data received from backend:", response.data);
+      // FIX: Now uses the centralized api.ts service instead of a hardcoded
+      // axios call to localhost — this respects VITE_API_URL in production
+      const data = await loginUser(email, password);
 
-      // If successful, log the token we get back//response.data.token
-      console.log(console.log('Login successful! Token:', response.data.token));
-      // TODO: In a real app, we would save this token and redirect the user.
-      
       // Save the token to the browser's local storage
-      localStorage.setItem('token', response.data.token);
+      localStorage.setItem('token', data.token);
 
-      //
       // Redirect the user to the dashboard page
       navigate('/');
-      
 
     } catch (err) {
-      // If there's an error, log it to the console
       if(isAxiosError(err)) {
         console.error('Login failed:', err.response ? err.response.data : err.message);
+        setError(err.response?.data?.error || "Login failed. Please check your credentials.");
     }
     }
     }
@@ -54,7 +48,11 @@ function LoginPage(){
 
                 <form onSubmit={handleLogin}>
             <CardContent>
-                    
+
+                    {error && (
+                        <p className="text-sm text-red-500 mb-4">{error}</p>
+                    )}
+
                         <div>
                             <Label htmlFor="email">Email </Label>
                                 <Input type="email" id="email" value={email} onChange={(e)=> setEmail(e.target.value)}/>

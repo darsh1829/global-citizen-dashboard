@@ -3,33 +3,33 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
-import axios, { isAxiosError } from "axios";
+import { isAxiosError } from "axios";
 import { useNavigate, Link } from "react-router-dom";
+import { registerUser } from "@/services/api";
 
 function RegistrationPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault();
+    setError(null);
     try {
-      const response = await axios.post('http://localhost:3000/api/auth/register', {
-        name: name,
-        email: email,
-        password: password
-      });
+      // FIX: Now uses the centralized api.ts service instead of a hardcoded
+      // axios call to localhost — this respects VITE_API_URL in production
+      const data = await registerUser(email, password);
 
-      console.log("Signup Successful! Token:", response.data.token);
-      
       // Save the token and redirect to onboarding
-      localStorage.setItem('token', response.data.token);
+      localStorage.setItem('token', data.token);
       navigate('/onboarding');
 
     } catch (err) {
       if (isAxiosError(err)) {
         console.error("Signup Failed:", err.response ? err.response.data : err.message);
+        setError(err.response?.data?.error || "Signup failed. Please try again.");
       }
     }
   }
@@ -42,6 +42,11 @@ function RegistrationPage() {
         </CardHeader>
         <form onSubmit={handleSignup}>
           <CardContent className="grid gap-4">
+
+            {error && (
+              <p className="text-sm text-red-500">{error}</p>
+            )}
+
             <div className="grid gap-2">
               <Label htmlFor="name">Name</Label>
               <Input
