@@ -1,17 +1,22 @@
 // --- DEPENDENCY IMPORTS ---
-require('dotenv').config();
 const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const pool = require('./db');
 const auth = require('./middleware/auth');
 const axios = require('axios');
+const cors = require('cors');
 // --- INITIALIZATION ---
 const app = express();
-const cors = require('cors');
+
 // --- MIDDLEWARE ---
+app.use(cors({ origin: 'http://localhost:5173' }));
 app.use(express.json());
-app.use(cors());
+
+
+// --- MIDDLEWARE ---
+
+
 // --- ROUTES ---
 
 // Root route
@@ -22,47 +27,25 @@ app.get('/', (req, res) => {
 // User Registration Route
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { name, email, password } = req.body;
-    if (!name || !email || !password) {
-      return res.status(400).json({ error: "Name, email, and password are required" });
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email and password are required" });
     }
-    
     const saltRounds = 10;
     const passwordHash = await bcrypt.hash(password, saltRounds);
-
-    // Insert the new user
     const newUser = await pool.query(
-      "INSERT INTO users (name, email, password_hash) VALUES ($1, $2, $3) RETURNING *",
-      [name, email, passwordHash]
+      "INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING *",
+      [email, passwordHash]
     );
-
     const newUserId = newUser.rows[0].id;
-
-    // Create default preferences for the new user
     await pool.query(
       "INSERT INTO preferences (user_id) VALUES ($1)",
       [newUserId]
     );
-
-    // --- THIS IS THE NEW PART ---
-    // 1. Create a JWT payload for the new user
-    const payload = {
-      user: {
-        id: newUserId
-      }
-    };
-
-    // 2. Sign the token
-    const token = jwt.sign(
-      payload,
-      process.env.JWT_SECRET,
-      { expiresIn: '1h' }
-    );
-
-    // 3. Send back the token AND the user object
-    res.json({ token, user: newUser.rows[0] });
-    // --------------------------
-
+    // FIX: Return a token on registration so frontend can immediately authenticate
+    const payload = { user: { id: newUserId } };
+    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
+    res.json({ id: newUserId, email: newUser.rows[0].email, token });
   } catch (err) {
     console.error("Registration Error:", err.message);
     res.status(500).send("Server error");
@@ -86,118 +69,144 @@ app.post('/api/auth/login', async (req, res) => {
     }
     const payload = { user: { id: user.rows[0].id } };
     const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
-    res.json({ token, user:user.rows[0] });
+    res.json({ token });
   } catch (err) {
     console.error("Login Error:", err.message);
     res.status(500).send("Server error");
   }
 });
 
+// GET current user's profile (Protected Route)
+app.get('/api/users/me', auth, async (req, res) => {
+  try {
+    const user = await pool.query(
+      "SELECT id, email, name FROM users WHERE id = $1",
+      [req.user.id]
+    );
+    if (user.rows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    res.json(user.rows[0]);
+  } catch (err) {
+    console.error("Get Profile Error:", err.message);
+    res.status(500).send('Server Error');
+  }
+});
+
+// UPDATE current user's display name (Protected Route)
+app.put('/api/users/me', auth, async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name) {
+      return res.status(400).json({ error: "Name is required" });
+    }
+    const updatedUser = await pool.query(
+      "UPDATE users SET name = $1 WHERE id = $2 RETURNING id, email, name",
+      [name, req.user.id]
+    );
+    res.json(updatedUser.rows[0]);
+  } catch (err) {
+    console.error("Update Name Error:", err.message);
+    res.status(500).send('Server Error');
+  }
+});
+
 // GET a user's preferences (Protected Route)
 app.get('/api/preferences', auth, async (req, res) => {
   try {
-    // THE FIX: Corrected the typo from 'tracked_countires' to 'tracked_countries'.
     const preferences = await pool.query(
       "SELECT tracked_countries, tracked_cryptos FROM preferences WHERE user_id = $1",
       [req.user.id]
     );
     res.json(preferences.rows[0]);
   } catch (err) {
-    
     console.error("Preferences Error:", err.message);
     res.status(500).send('Server Error');
   }
 });
 
-//
-app.put('/api/preferences',auth, async (req, res) => {
+// UPDATE a user's preferences (Protected Route)
+app.put('/api/preferences', auth, async (req, res) => {
   try {
-    const {tracked_countries, tracked_cryptos}=req.body;
+    const { tracked_countries, tracked_cryptos } = req.body;
     const userId = req.user.id;
-
     const updatePreferences = await pool.query(
-      "UPDATE preferences SET tracked_countries=$1, tracked_cryptos = $2 WHERE user_id = $3 RETURNING *",
+      "UPDATE preferences SET tracked_countries=$1, tracked_cryptos=$2 WHERE user_id=$3 RETURNING *",
       [tracked_countries, tracked_cryptos, userId]
     );
-     console.log("Data being sent to client:", updatePreferences.rows[0]);
     res.json(updatePreferences.rows[0]);
   } catch (err) {
-    
     console.error("Update Preferences Error:", err.message);
     res.status(500).send('Server Error');
   }
 });
 
+// News - GNews API
+// Cache for 5 minutes to avoid hitting GNews rate limits during development
+let newsCache = { data: null, timestamp: 0 };
+const NEWS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-//Onboarding Route
-app.put('/api/users/me', auth, async (req,res) => {
-  try{
-    const {name} = req.body;
-    const userID = req.user.id;
-    const updateUser = await pool.query(
-        "UPDATE users SET name = $1 WHERE id = $2 RETURNING *",
-        [name, userID]
-    ); 
-    res.json(updateUser.rows[0]);
-    
-    
-  }catch(err){
-      console.error("Onboarding Failed: ", err.message);
-      res.status(500).send("Server Error");
-  }
-
-})
-
-//Current News
 app.get('/api/data/news', async (req, res) => {
   try {
-    const newsResponse = await axios.get('https://api.currentsapi.services/v1/latest-news', {
+    const now = Date.now();
+    if (newsCache.data && (now - newsCache.timestamp) < NEWS_CACHE_TTL) {
+      return res.json(newsCache.data);
+    }
+    const newsResponse = await axios.get('https://gnews.io/api/v4/top-headlines', {
       params: {
-        // The API key is now securely loaded from our .env file
-        apiKey: process.env.CURRENTS_API_KEY
+        token: process.env.GNEWS_API_KEY,
+        lang: 'en',
+        max: 10
       }
     });
-
-    res.json(newsResponse.data);
-
+    const mapped = {
+      status: 'ok',
+      news: newsResponse.data.articles.map((article, index) => ({
+        id: String(index),
+        title: article.title,
+        description: article.description,
+        url: article.url,
+        image: article.image,
+        published: article.publishedAt,
+        author: article.source?.name || 'Unknown'
+      }))
+    };
+    newsCache = { data: mapped, timestamp: now };
+    res.json(mapped);
   } catch (err) {
+    // If rate limited and we have stale cache, serve it instead of failing
+    if (newsCache.data) {
+      console.error("News API Error (serving stale cache):", err.message);
+      return res.json(newsCache.data);
+    }
     console.error("News API Error:", err.message);
     res.status(500).send('Server Error');
   }
 });
 
-
-//Crypto rate
-// app.get('/api/data/crypto', async(req,res)=>{
-//   try{
-//   const cryptoResponse =  await axios.get('https://api.coingecko.com/api/v3/simple/price', {
-//     params: {
-      
-//       ids: 'bitcoin,ethereum,ripple,dogecoin',
-//       vs_currencies: 'usd'
-
-//     }
-//   })
-   
-//     res.json(cryptoResponse.data);
-//   }
-//   catch(err){
-//    res.status(500).send('Server Error');
-//   }
-// })
+// Crypto - CoinGecko public endpoint (no API key needed)
+// Simple 60s cache to avoid 429 rate limit errors
+let cryptoCache = { data: null, timestamp: 0 };
+const CACHE_TTL = 60 * 1000; // 60 seconds
 
 app.get('/api/data/crypto', async (req, res) => {
   try {
+    const now = Date.now();
+    if (cryptoCache.data && (now - cryptoCache.timestamp) < CACHE_TTL) {
+      return res.json(cryptoCache.data);
+    }
     const cryptoResponse = await axios.get('https://api.coingecko.com/api/v3/coins/markets', {
       params: {
-        vs_currency: 'usd', // The currency to compare against
-        ids: 'bitcoin,ethereum,ripple,dogecoin,solana,cardano', // The coins we want
-        order: 'market_cap_desc', // Order the results
-        per_page: 10, // Limit the results
+        vs_currency: 'usd',
+        ids: 'bitcoin,ethereum,ripple,dogecoin,solana,cardano',
+        order: 'market_cap_desc',
+        per_page: 6,
         page: 1,
         sparkline: false
-      }
+      },
+      headers: { 'Accept': 'application/json' }
     });
+    cryptoCache = { data: cryptoResponse.data, timestamp: now };
     res.json(cryptoResponse.data);
   } catch (err) {
     console.error("Crypto API Error:", err.message);
@@ -205,34 +214,29 @@ app.get('/api/data/crypto', async (req, res) => {
   }
 });
 
-//ExcangeRate
+// Exchange Rates - FreeCurrencyAPI
+// Returns: { data: { EUR: 0.91, GBP: 0.79, ... } }
+// Mapped to same shape frontend expects: { result, base_code, conversion_rates }
 app.get('/api/data/rates', async (req, res) => {
   try {
-    const apiKey = process.env.EXCHANGERATE_API_COM_KEY;
-
-    // --- ADD THIS DEBUGGING LINE ---
-    console.log("Attempting to use ExchangeRate-API key:", apiKey);
-    // -----------------------------
-
-    if (!apiKey) {
-      throw new Error("Exchange rate API key is missing. Please check your .env file.");
-    }
-
-    const url = "https://v6.exchangerate-api.com/v6/aecdd8ef95e4c227b0d6f738/latest/USD"//`https://v6.exchangerate-api.com/v6/${apiKey}/latest/USD`;
-
-    const ratesResponse = await axios.get(url);
-
-    res.json(ratesResponse.data);
-
+    const ratesResponse = await axios.get('https://api.freecurrencyapi.com/v1/latest', {
+      params: {
+        apikey: process.env.FREECURRENCY_API_KEY,
+        base_currency: 'USD'
+      }
+    });
+    // Map to the shape CurrencyPage expects
+    const mapped = {
+      result: 'success',
+      base_code: 'USD',
+      conversion_rates: ratesResponse.data.data
+    };
+    res.json(mapped);
   } catch (err) {
     console.error("Rates API Error:", err.message);
     res.status(500).send('Server Error');
   }
 });
 
-
 // --- EXPORT ---
 module.exports = app;
-
-
-
