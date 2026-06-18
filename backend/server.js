@@ -6,7 +6,7 @@ const pool = require('./db');
 const auth = require('./middleware/auth');
 const axios = require('axios');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-
+const cors = require('cors');
 // --- AI SETUP ---
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
