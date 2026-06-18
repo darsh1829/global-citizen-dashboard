@@ -5,17 +5,16 @@ const jwt = require('jsonwebtoken');
 const pool = require('./db');
 const auth = require('./middleware/auth');
 const axios = require('axios');
-const cors = require('cors');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+
+// --- AI SETUP ---
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
 // --- INITIALIZATION ---
 const app = express();
 
 // --- MIDDLEWARE ---
-app.use(cors({ origin: ['http://localhost:5173', 'https://global-citizen-dashboard.vercel.app', 'https://global-citizen.darssh.dev'] }));
 app.use(express.json());
-
-
-// --- MIDDLEWARE ---
-
 
 // --- ROUTES ---
 
@@ -239,4 +238,57 @@ app.get('/api/data/rates', async (req, res) => {
 });
 
 // --- EXPORT ---
+// AI Insight of the Day
+// Takes today's cached news headlines and asks Gemini to write a short,
+// digestible summary of what's happening in the world today.
+let insightCache = { data: null, timestamp: 0 };
+const INSIGHT_CACHE_TTL = 60 * 60 * 1000; // 1 hour — no need to regenerate more often
+
+app.get('/api/ai/insight', async (req, res) => {
+  try {
+    const now = Date.now();
+    if (insightCache.data && (now - insightCache.timestamp) < INSIGHT_CACHE_TTL) {
+      return res.json(insightCache.data);
+    }
+
+    // Reuse the news cache so we don't make an extra GNews call
+    if (!newsCache.data || !newsCache.data.news || newsCache.data.news.length === 0) {
+      return res.status(503).json({ error: "News data not yet available, try again shortly." });
+    }
+
+    const headlines = newsCache.data.news
+      .slice(0, 8)
+      .map((article) => `- ${article.title}`)
+      .join('\n');
+
+    const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash" });
+
+    const prompt = `You are a sharp, neutral news analyst writing for a "Global Citizen Dashboard" app.
+Based on these recent headlines, write a short "Insight of the Day" — 3-4 sentences summarizing
+the most important theme or connection across today's news. Be concise, insightful, and politically neutral.
+Do not just list the headlines back, synthesize them into one cohesive insight.
+
+Headlines:
+${headlines}`;
+
+    const result = await model.generateContent(prompt);
+    const insightText = result.response.text();
+
+    const mapped = {
+      insight: insightText.trim(),
+      generatedAt: new Date().toISOString()
+    };
+
+    insightCache = { data: mapped, timestamp: now };
+    res.json(mapped);
+  } catch (err) {
+    console.error("AI Insight Error:", err.message);
+    // Serve stale cache if available rather than failing completely
+    if (insightCache.data) {
+      return res.json(insightCache.data);
+    }
+    res.status(500).send('Server Error');
+  }
+});
+
 module.exports = app;
