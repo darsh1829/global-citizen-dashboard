@@ -77,7 +77,7 @@ DATABASE_URL=your_neon_connection_string
  
 **`frontend/.env`**
 ```env
-VITE_API_URL=http://localhost:3000
+VITE_API_URL=http://localhost:5173
 ```
  
 ### Database Setup
