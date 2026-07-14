@@ -106,3 +106,7 @@ global-citizen-dashboard/
 ## 📄 License
  
 MIT
+
+---
+## Credits
+<a href="https://icons8.com/icon/j2D-17SBxXAJ/globe-showing-asia-australia">Globe Showing Asia Australia</a> icon by <a href="https://icons8.com">Icons8</a>
